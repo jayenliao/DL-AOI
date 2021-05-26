@@ -2,7 +2,7 @@
 
 Author: Jay Liao (re6094028@gs.ncku.edu.tw)
 
-This is assignment 5 of Deep Learning, a course at Institute of Data Science, National Cheng Kung University. This project aims to utlize deep learning techniques to perform defect classification for AOI images.
+This is assignment 5 of Deep Learning, a course at Institute of Data Science, National Cheng Kung University. This project aims to utilize deep learning techniques to perform defect classification for AOI images.
 
 ## Data
 
