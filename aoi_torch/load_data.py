@@ -5,7 +5,6 @@ from torchvision import datasets, transforms
 from sklearn.model_selection import train_test_split 
 from aoi_torch.args import init_arguments
 
-
 def _files_preprocess(table, label, source_folder, target_folder):
     
     for idx in tqdm(table.index):
@@ -15,7 +14,6 @@ def _files_preprocess(table, label, source_folder, target_folder):
         tmp_source_path = os.path.join(source_folder, table.loc[idx, 'ID'])
         tmp_target_path = os.path.join(tmp_folder_path, table.loc[idx, 'ID'])
         shutil.copyfile(tmp_source_path, tmp_target_path)
-
 
 def files_preprocess(subset:str, label:str, val_size:float, test_size:float, seed:int):
     print('Preprocessing the original', subset + 'ing', 'images ...')
@@ -33,8 +31,7 @@ def files_preprocess(subset:str, label:str, val_size:float, test_size:float, see
     else:
         _files_preprocess(table, label, source_folder, 'images_test')
 
-
-def load_with_splitting(subset:str, label:str, val_size:float, test_size:float, seed:int, transforms_hyper:dict):
+def load_with_splitting(label:str, val_size:float, test_size:float, seed:int, transforms_hyper:dict):
     if not os.path.exists('images_va'):
         files_preprocess('train', label, val_size, test_size, seed)
     if not os.path.exists('images_test'):
@@ -73,10 +70,10 @@ def load_with_splitting(subset:str, label:str, val_size:float, test_size:float, 
 
     return data_tr, data_va, data_te, data_test
 
-
 if __name__ == '__main__':
     args = init_arguments().parse_args()
     if not os.path.exists('images_va'):
         files_preprocess('train', args.label, args.val_size, args.test_size, args.random_state)
     if not os.path.exists('images_test'):
         files_preprocess('test', args.label, args.val_size, args.test_size, args.random_state)
+        

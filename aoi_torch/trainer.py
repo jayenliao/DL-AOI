@@ -1,77 +1,65 @@
-import sys, os, time, pickle
+import os, time
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
-from torch.utils.data import TensorDataset, DataLoader
-from datetime import datetime
+from torch.utils.data import DataLoader
 from tqdm import tqdm
+from datetime import datetime
 from collections import namedtuple
 from aoi_torch.models import *
+from efficientnet_pytorch import EfficientNet
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 class Trainer:
-    def __init__(self, X_tr, y_tr, X_te, y_te, device, pretrained_model:str, model_name:str, num_conv_layers:int, model_hyper_param:dict, optimizer:str, lr:float, epochs:int, batch_size:int, savePATH:str, save_model:bool, pretrained_model:str, verbose:bool, random_state=4028):
-        ModelConfig = namedtuple('ModelConfig', ['block', 'n_blocks', 'channels'])
-
-        if pretrained_model.lower() == 'resnet18':
-            self.pretrained_model = models.resnet18(pretrained=True)
-            self.model_config = ModelConfig(block = Bottleneck, n_blocks = [3, 4, 6, 3], channels = [64, 128, 256, 512])
-        elif pretrained_model.lower() == 'resnet50':
-            self.pretrained_model = models.resnet50(pretrained=True)
-            self.model_config = ModelConfig(block = Bottleneck, n_blocks = [3, 4, 6, 3], channels = [64, 128, 256, 512])
-        elif pretrained_model.lower() == 'resnet101':
-            self.pretrained_model = models.resnet101(pretrained=True)
-            self.model_config = ModelConfig(block = Bottleneck, n_blocks = [3, 4, 6, 3], channels = [64, 128, 256, 512])
-        elif pretrained_model.lower() == 'vgg16':
-            self.pretrained_model = models.vgg16(pretrained=True)
-
-        IN_FEATURES = self.pretrained_model.fc.in_features 
-        OUTPUT_DIM = len(test_data.classes)
-        self.pretrained_model.fc = fc = nn.Linear(IN_FEATURES, OUTPUT_DIM)
-        
-        if 'resnet' in pretrained_model.lower():
-            self.model = ResNet(self.model_config, OUTPUT_DIM)
-            self.model.load_state_dict(self.pretrained_model.state_dict())
-        print(f'The model has {count_parameters(self.model):,} trainable parameters.')
-
-
-        self.model_name = model_name
-        
-        if model_name.lower() == 'lenet5':
-            self.model = LeNet(**model_hyper_param)        
-        elif model_name.lower() == 'improved_lenet5':
-            # ...
-            self.model = LeNet(**model_hyper_param)
-        else:
-            sys.exit('ERROR! The model name cannot be ' + model_name + '.')
-
-        self.device = device
-        self.dataset_tr = TensorDataset(X_tr.to(device), y_tr.to(device))
-        self.X_te = X_te.to(device)
-        self.y_te = y_te
-        self.model = self.model.to(device)
-        self.num_conv_layers = num_conv_layers
-        self.hidden_act = model_hyper_param['hidden_act']
-        self.hidden_sizes = model_hyper_param['hidden_sizes']
-        self.filter_size = model_hyper_param['filter_size']
-        self.pooling_size = model_hyper_param['pooling_size']
-        self.output_size = model_hyper_param['output_size']
-        self.train_size = Ｘ_tr.shape[0]
-        self.batch_size = batch_size
-        self.epochs = epochs
+    def __init__(self, data_tr, data_va, data_te, device:str, pretrained_model:str, optimizer:str, lr:float, epochs:int, batch_size:int, savePATH:str, save_model:bool, verbose:bool, random_state=4028):
         self.savePATH = savePATH if savePATH[-1] == '/' else savePATH + '/'
-        self.pretrained_model = pretrained_model
         self.random_state = random_state
         self.verbose = verbose
-        self.train_loss = []
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.loss_tr = []
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        
+        # data
+        OUTPUT_DIM = len(data_tr.classes)
+        self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
+        self.dataloader_tr = DataLoader(data_tr, shuffle=True, batch_size=batch_size)
+        self.dataloader_va = DataLoader(data_va, shuffle=False, batch_size=len(data_va))
+        self.dataloader_te = DataLoader(data_te, shuffle=False, batch_size=len(data_te))
+
+        # model
+        ModelConfig = namedtuple('ModelConfig', ['block', 'n_blocks', 'channels'])
+        self.model_name = pretrained_model.lower()
+        if self.model_name == 'resnet18':
+            self.pretrained_model = models.resnet18(pretrained=True)
+            self.model_config = ModelConfig(block=Bottleneck, n_blocks=[3, 4, 6, 3], channels=[64, 128, 256, 512])
+        elif self.model_name == 'resnet50':
+            self.pretrained_model = models.resnet50(pretrained=True)
+            self.model_config = ModelConfig(block=Bottleneck, n_blocks=[3, 4, 6, 3], channels=[64, 128, 256, 512])
+        elif self.model_name == 'resnet101':
+            self.pretrained_model = models.resnet101(pretrained=True)
+            self.model_config = ModelConfig(block=Bottleneck, n_blocks=[3, 4, 6, 3], channels=[64, 128, 256, 512])
+        elif self.model_name == 'vgg16':
+            self.pretrained_model = models.vgg16(pretrained=True)
+        elif self.model_name == 'efficientnet-b7':
+            self.model = EfficientNet.from_pretrained('efficientnet-b7', num_classes=OUTPUT_DIM)
+
+        if 'resnet' in pretrained_model.lower():
+            IN_FEATURES = self.pretrained_model.fc.in_features
+            self.pretrained_model.fc = nn.Linear(IN_FEATURES, OUTPUT_DIM)
+            self.model = ResNet(self.model_config, OUTPUT_DIM)
+            self.model.load_state_dict(self.pretrained_model.state_dict())
+        if self.verbose:
+            print(f'The model has {count_parameters(self.model):,} trainable parameters.')
+        
+        if optimizer.lower() == 'adam':
+            self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
 
     def accuracy_score(self, y, yt, top=1):
         y = y.cpu().detach().numpy()
@@ -91,59 +79,59 @@ class Trainer:
 
         return acc
 
-    def evaluation_when_training(self, epoch:int, print_result_per_epochs:int, X_va, y_va):
+    def evaluation_when_training(self, epoch:int, print_result_per_epochs:int):
         self.model.eval()
         
-        # Compute the top-1 and top-5 accuracy scores on the training set
-        acc1 = self.accuracy_score(self.output, self.y_batch, top=1)
-        self.accuracy_tr['Top-1'].append(acc1)
-        acc5 = self.accuracy_score(self.output, self.y_batch, top=5)
-        self.accuracy_tr['Top-5'].append(acc5)
+        # Compute the top-1 and top-2 accuracy scores on the training set
+        acc1_tr = self.accuracy_score(self.output, self.y_batch, top=1)
+        acc5_tr = self.accuracy_score(self.output, self.y_batch, top=2)
+        self.accuracy_tr['Top-1'].append(acc1_tr)
+        self.accuracy_tr['Top-2'].append(acc5_tr)
             
-        # Print the training accuracy scores once per given no. of epochs
+        # Compute the top-1 and top-2 accuracy scores on the validation set
+        with torch.no_grad():
+            for (x, y) in self.dataloader_va:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                if 'resnet' in self.model_name:
+                    yp, _ = self.model(x)
+                else:
+                    yp = self.model(x)
+                acc1_va = self.accuracy_score(yp, y, top=1)
+                acc5_va = self.accuracy_score(yp, y, top=2)
+                self.accuracy_va['Top-1'].append(acc1_va)
+                self.accuracy_va['Top-2'].append(acc5_va)
+                
+        # Print the validation accuracy scores once per given no. of epochs
         if epoch % print_result_per_epochs == 0:
             print(f'Epoch {epoch:4d}')
-            print(f'  Training accuracy: {acc1:.4f} (top-1) {acc5:.4f} (top-5)')
-        
-        # If the evaluation set is given, compute the top-1 and top-5 accuracy scores on it
-        if self.evaluation:
-            acc1 = self.accuracy_score(self.model(X_va), y_va, top=1)
-            self.accuracy_va['Top-1'].append(acc1)
-            acc5 = self.accuracy_score(self.model(X_va), y_va, top=5)
-            self.accuracy_va['Top-5'].append(acc5)
-            
-            # Find the best performance
-            if acc1 > self.best_acc['best_acc1']:
-                self.best_acc['best_acc1'] = acc1
-                self.best_acc['best_acc1_epoch'] = epoch
-            if acc5 > self.best_acc['best_acc5']:
-                self.best_acc['best_acc5'] = acc5
-                self.best_acc['best_acc5_epoch'] = epoch
-            if (acc1 + acc5) / 2 > self.best_acc['best_acc_mean']:
-                self.best_acc['best_acc_mean'] = (acc1 + acc5) / 2
-                self.best_acc['best_acc_mean_epoch'] = epoch
-                
-            # Print the validation accuracy scores once per given no. of epochs
-            if epoch % print_result_per_epochs == 0:
-                print(f'Validation accuracy: {acc1:.4f} (top-1) {acc5:.4f} (top-5)')
+            print(f'  Training accuracy: {acc1_tr:.4f} (top-1) {acc5_tr:.4f} (top-2)')
+            print(f'Validation accuracy: {acc1_va:.4f} (top-1) {acc5_va:.4f} (top-2)')
 
+        # Find the best performance
+        if acc1_va > self.best_acc['best_acc1']:
+            self.best_acc['best_acc1'] = acc1_va
+            self.best_acc['best_acc1_epoch'] = epoch
+            torch.save(self.model.state_dict(), self.folder_name + 'model.pt')
+        if acc5_va > self.best_acc['best_acc5']:
+            self.best_acc['best_acc5'] = acc5_va
+            self.best_acc['best_acc5_epoch'] = epoch
 
     def train_single_epoch(self):
         self.model.train()
-        for (x, y) in tqdm(self.loader_tr):
+        for (x, y) in tqdm(self.dataloader_tr):
             self.X_batch = x.to(self.device)
             self.y_batch = y.to(self.device)
-            #print('X_batch', X_batch.shape)
-            #print('y_batch', y_batch.shape)
-            self.output = self.model(self.X_batch)
+            if 'resnet' in self.model_name:
+                self.output, _ = self.model(self.X_batch)
+            else:
+                self.output = self.model(self.X_batch)
             loss = self.criterion(self.output, self.y_batch)
             loss.backward()
             self.optimizer.step()
-            self.train_loss.append(loss.cpu().detach().numpy())
-            #if batch_temp > loader[10000]:
-            #break
+            self.loss_tr.append(loss.cpu().detach().numpy())
 
-    def train(self, X_va=[], y_va=[], print_result_per_epochs=10, save_model=True):
+    def train(self, print_result_per_epochs=10):
         '''
         1. Initialize
         2. Load the pretrained model (if the pretrained model name is given) or train a new model
@@ -153,128 +141,122 @@ class Trainer:
         '''
         
         # 1. Intialize
-        self.loader_tr = DataLoader(dataset=self.dataset_tr, shuffle=True, batch_size=self.batch_size)
-        self.evaluation = True if len(X_va) + len(y_va) > 1 else False
-        if self.evaluation:
-            X_va = X_va.to(self.device)
-            y_va = y_va.to(self.device)
-
-        # 2. Load the pretrained model or train a new model
-        print('\nTraining a new model ...', end='  ')
-        self.accuracy_tr = {'Top-1': [], 'Top-5': []}
-        self.accuracy_va = {'Top-1': [], 'Top-5': []}
-        self.accuracy_te = {'Top-1': 0, 'Top-5': 0}
-        self.best_acc = {
-            'best_acc1': 0, 'best_acc1_epoch': 0, 
-            'best_acc5': 0, 'best_acc5_epoch': 0,
-            'best_acc_mean': 0, 'best_acc_mean_epoch': 0
-        }
-        '''else:
-            print('Loading the pretrained model ...')
-            fn = self.savePATH + pretrained_model
-            with open(fn, 'rb') as f:
-                self.model = pickle.load(f)
-            fn = self.savePATH + fn.replace('Model', 'Accuracy').replace('.pkl', '.txt')
-            arr = np.loadtxt(fn)
-            self.accuracy_tr = {'Top-1': list(arr[:,0]), 'Top-5': list(arr[:,1])}
-            if arr.shape[1] == 4:
-                self.accuracy_va = {'Top-1': list(arr[:,2]), 'Top-5': list(arr[:,3])}
-            fn = fn.replace('Acc', 'BestAcc')
-            self.best_acc = pd.read_csv(fn, index_col=0).T.to_dict('records')[0]
-            print('Keep training the model ...', end='  ')'''
-        
-        if not self.verbose:
-            print(f'(Batch size = {self.batch_size}, No. of epochs = {self.epochs})')
+        self.dt = datetime.now().strftime('%y-%m-%d-%H-%M-%S')
+        self.folder_name = self.savePATH + self.dt + '_' + self.model_name + '_' + '_bs=' + str(self.batch_size) + '_epochs=' + str(self.epochs) + '/'
+        if not os.path.exists(self.folder_name):
+            os.makedirs(self.folder_name)
+        self.model = self.model.to(self.device)
+        self.criterion = self.criterion.to(self.device)
+        self.accuracy_tr = {'Top-1': [], 'Top-2': []}
+        self.accuracy_va = {'Top-1': [], 'Top-2': []}
+        self.best_acc = {'best_acc1': 0, 'best_acc1_epoch': 0, 'best_acc5': 0, 'best_acc5_epoch': 0,}
+        if self.verbose:
+            print('\nTraining a new', self.model_name, 'model ...', end='  ')
+            print(f'(Batch size = {self.batch_size}, No. of epochs = {self.epochs})\n')
+            print(self.model)
 
         # 3. Training! 
-        time_cost = []
+        self.time_cost = []
         t0 = time.time()
         for epoch in range(1, self.epochs+1):
             tEpoch = time.time()
-            
-            
-
-
-            self.evaluation_when_training(epoch, print_result_per_epochs, X_va, y_va)
-            self.accuracy_te['Top-1'] = self.accuracy_score(self.model(self.X_te), self.y_te, top=1)
-            self.accuracy_te['Top-5'] = self.accuracy_score(self.model(self.X_te), self.y_te, top=5)
+            self.train_single_epoch()
+            self.evaluation_when_training(epoch, print_result_per_epochs)
             tStep = time.time()
-            time_cost.append(tStep - tEpoch)
+            self.time_cost.append(tStep - tEpoch)
 
         # 4. Report that the model have been finished training and 
         #    Save the model performances: acc_tr/acc_va, acc_te, best_acc, and time_cost
-        self.trained = True
         tdiff = time.time() - t0
-        if not self.verbose:
-            print('\nFinish training! Total time cost for %3d epochs: %.2f s' % (self.epochs, tdiff))
-        arr = [self.accuracy_tr['Top-1'], self.accuracy_tr['Top-5']]
-        if self.evaluation: arr += [self.accuracy_va['Top-1'], self.accuracy_va['Top-5']] 
-        
-        if not self.verbose:
+        if self.verbose:
+            print('\nFinish training! Total time cost for %d epochs: %.2f s' % (self.epochs, tdiff))
+            print('The best validation performance: Top-1 accuracy=%.4f at epoch %d' % (self.best_acc['best_acc1'], self.best_acc['best_acc1_epoch']))
+    
+    def evaluate(self):
+        # Compute the top-1 and top-2 accuracy scores on the testing set
+        if self.verbose:
             print('\nEvaluate the trained model on the testing set ...')
-            print_accuracy(self.y_te, self.model(self.X_te))
-
-        if not self.verbose:
-            print('Model performances are saved as the following files:')
-        self.dt = datetime.now().strftime('%y-%m-%d-%H-%M-%S')
-        #self.folder_name = self.savePATH + self.dt + '_' + str(self.num_conv_layers) + '_' + self.model_name + '_' + self.hidden_act + '_fs=' + str(self.filter_size) + '_bs=' + str(self.batch_size) + '_epochs=' + str(self.epochs) + '/'
-        self.folder_name = self.savePATH + self.dt + '_' + str(self.num_conv_layers) + '_' + self.model_name + '_' + self.hidden_act + '_fs=' + str(self.filter_size) + '_bs=' + str(self.batch_size) + '_epochs=' + str(self.epochs) + '/'
-        try:
-            os.makedirs(self.folder_name)
-        except FileExistsError:
-            pass
+        self.model.eval()
+        with torch.no_grad():
+            for (x, y) in self.dataloader_te:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                if 'resnet' in self.model_name:
+                    yp, _ = self.model(x)
+                else:
+                    yp = self.model(x)
+                acc1_te = self.accuracy_score(yp, y, top=1)
+                acc5_te = self.accuracy_score(yp, y, top=2)
+        if self.verbose:
+            print(f'Testing performance: Top-1 accuracy={acc1_te:.4f}, Top-2 accuracy={acc5_te:.4f}')
+            print('\nModel performances are saved as the following files:')
         
         self.fn = self.folder_name + 'Accuracy.txt'
+        arr = [self.accuracy_tr['Top-1'], self.accuracy_tr['Top-2'], self.accuracy_va['Top-1'], self.accuracy_va['Top-2']] 
         np.savetxt(self.fn, arr)
-        if not self.verbose:
+        if self.verbose:
             print('-->', self.fn)
 
         fn = self.fn.replace('Acc', 'TestAcc')
-        pd.DataFrame(self.accuracy_te, index=['score']).T.to_csv(fn)
-        if not self.verbose:
+        pd.DataFrame({'Top-1': acc1_te, 'Top-2': acc5_te}, index=['score']).T.to_csv(fn)
+        if self.verbose:
             print('-->', fn)
 
         fn = self.fn.replace('Acc', 'BestAcc')
         pd.DataFrame(self.best_acc, index=[0]).T.to_csv(fn)
-        if not self.verbose:
+        if self.verbose:
             print('-->', fn)
 
         fn = self.fn.replace('Accuracy', 'TimeCost')
-        np.savetxt(fn, numpy.array(time_cost))
-        if not self.verbose:
+        np.savetxt(fn, np.array(self.time_cost))
+        if self.verbose:
             print('-->', fn)
 
-        # 5. Save the trained model
-        if save_model:
-            print('Saving model ....')
-            fn = self.fn.replace('Accuracy', 'Model').replace('.txt', '.pkl')
-            with open(fn, 'wb') as f:
-                pickle.dump(self.model, f, pickle.HIGHEST_PROTOCOL)
-            if not self.verbose:
-                print('\nThe model is saved as', fn)
+    def predict(self, fn_test, label, data_test):
+        dataloader_test = DataLoader(data_test, shuffle=False, batch_size=self.batch_size)
+        yout = []
+        self.model.eval()
+        with torch.no_grad():
+            for (x, _) in dataloader_test:
+                x = x.to(self.device)
+                if 'resnet' in self.model_name:
+                    yp, _ = self.model(x)
+                else:
+                    yp = self.model(x)
+                yout += list(np.argmax(yp.cpu().numpy(), axis=1))
+        
+        if self.verbose:
+            print('\nDistribution of predicted labels:')
+            for i, n in enumerate(np.bincount(yout)):
+                p = n/len(yout)
+                print(f'{i}: {n:4d} ({p:.4f})', end='  ')
+                if i % 3 == 2:
+                    print()
+        
+        df_out = pd.read_csv(fn_test, header=0)
+        df_out[label] = yout
+        fn = self.folder_name + 'prediction_out_' + self.model_name + '.csv'
+        df_out.to_csv(fn, index=False)
+        if self.verbose:
+            print('*** The prediction output is saved as', fn)
 
-    def plot_training(self, type_:str, figsize=(8, 6), save_plot=True):
+    def plot_training(self, type_:str, figsize:tuple, save_plot=True):
         plt.figure(figsize=figsize)
         if type_ == 'loss':
-            x = np.arange(len(self.train_loss))
-            plt.plot(x, smooth_curve(self.train_loss))
-            plt.title('Plot of Training Loss of ' + self.model_name)
-            plt.xlabel('Iterations')
-            plt.ylabel('Loss')
+            plt.plot(np.arange(len(self.loss_tr)), self.loss_tr, label=type_+'(train)')
         elif type_ == 'accuracy':
-            x = np.arange(1, self.epochs+1)
-            for k in self.accuracy_tr.keys():
-                plt.plot(x, self.accuracy_tr[k], label=k+' accuracy (train)')
-                if self.evaluation:
-                    plt.plot(x, self.accuracy_va[k], label=k+' accuracy (val)')
-            plt.ylim(0, 1)
-            plt.title('Plot of Accuracy During Training of ' + self.model_name)
-            plt.xlabel('Epoch')
-            plt.ylabel('Accuracy')
+            x = np.arange(self.epochs)
+            plt.plot(x, self.accuracy_tr['Top-1'], label=type_+'(train)')
+            plt.plot(x, self.accuracy_va['Top-1'], label=type_+'(val)')
+            plt.ylim(.8, 1)
             plt.legend()
+        plt.title('Plot of ' + type_.capitalize() + ' of ' + self.model_name)
+        plt.xlabel('Epoch')
+        plt.ylabel(type_.capitalize())
         plt.grid()
-        #plt.show()
+            
+
         if save_plot:
-            fn = self.fn.replace('Accuracy', type_).replace('.txt', '.png')
+            fn = self.folder_name + type_ + '_plot.png'
             plt.savefig(fn)
             print('The', type_, 'plot is saved as', fn)

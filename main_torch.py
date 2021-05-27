@@ -1,42 +1,35 @@
 '''
-Deep Learning - HW5: AOI (torch versiob)
+Deep Learning - HW5: AOI (torch version)
 Jay Liao (re6094028@gs.ncku.edu.tw)
 '''
 
+from aoi_torch.trainer import Trainer
 from aoi_torch.args import init_arguments
-from aoi_torch.load_data import files_preprocess
-from tqdm import tqdm
-import os, shutil, time, pickle
-import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-import scipy as sp
-import torch
-from torch._C import device
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
-from torchvision import models
+from aoi_torch.load_data import load_with_splitting
 
 def main(args):
-    # load the data
-    if not os.path.exists('images_va'):
-        files_preprocess('train', args.label, args.val_size, args.test_size, args.random_state)
-    if not os.path.exists('images_test'):
-        files_preprocess('test', args.label, args.val_size, args.test_size, args.random_state)
-    data_tr = datasets.ImageFolder(root='images_tr', transform=transforms.ToTensor())
-    data_va = datasets.ImageFolder(root='images_va', transform=transforms.ToTensor())
-    data_te = datasets.ImageFolder(root='images_te', transform=transforms.ToTensor())
-    data_test = datasets.ImageFolder(root='images_test', transform=transforms.ToTensor())
+    # load and preprocess the data
+    transforms_hyper = {
+        'pretrained_size': args.pretrained_size,
+        'padding': args.padding,
+        'rotation': args.rotation,
+        'horizontal_flip': args.horizontal_flip
+    }
+    data_tr, data_va, data_te, data_test = load_with_splitting(args.label, args.val_size, args.test_size, args.seed, transforms_hyper)
 
-    # preprocess the data
     # put the data into the trainer
-    # train the model
-    # evaluate the model
-    # predict
-    ''
+    trainer = Trainer(
+        data_tr, data_va, data_te,
+        args.device, args.pretrained_model,
+        args.optimizer, args.lr, args.epochs, args.batch_size,
+        args.savePATH, args.verbose, args.seed
+    )
+
+    trainer.train(args.print_result_per_epochs)  # train and save the model
+    trainer.evaluate()                           # evaluate the model on the splitting testing data
+    trainer.predict(args.testDATA, args.label, data_test) # predict for the real testing data without ground truth labels
+    trainer.plot_training('loss', args.figsize, save_plot=True)
+    trainer.plot_training('accuracy', args.figsize, save_plot=True)
 
 if __name__ == '__main__':
     args = init_arguments().parse_args()
