@@ -34,11 +34,23 @@ raw_model = Sequential([
 
 - Source codes for training a 5-layered CNN with Keras:
 
-    -  `./lenet_keras/args.py`: define the arguments parser
+    - `./aoi_keras/args.py`: define the arguments parser
     
-    -  `./lenet_keras/trainer.py`: class for training, predicting, and evaluating the models
+    - `./aoi_keras/trainer.py`: class for training, predicting, and evaluating the models
     
-    -  `./lenet_keras/load_data.py`: functions for loading images with train/val/test splitting
+    - `./aoi_keras/load_data.py`: functions for loading images with train/val/test splitting
+
+- `main_keras.py`: the main program for fine tuning a pretrained ResNet50 model and an EfficientNet-b7 model.
+
+- Source codes for fine tuning a pretrained ResNet50 model and an EfficientNet-b7 model:
+    
+    - `./aoi_torch/args.py`: define the arguments parser
+    
+    - `./aoi_torch/trainer.py`: class for training, predicting, and evaluating the models
+
+    - `./aoi_torch/models.py`: define the models.
+    
+    - `./aoi_torch/load_data.py`: functions for loading images with train/val/test splitting
 
 ## Folders
 
@@ -51,13 +63,13 @@ raw_model = Sequential([
 ## Requirements
 
 ```
-numpy==1.16.3
-pandas==0.24.2
-tqdm==4.50.0
+numpy
+pandas
+tqdm
 opencv-python==3.4.2.16
 matplotlib==3.1.3
-torch==1.7.1
-keras==2.4.3
+torch
+keras==2.2.5
 tensorflow==2.3.1
 tensorflow-gpu==2.3.1
 ```
