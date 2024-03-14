@@ -14,7 +14,7 @@ This is assignment 5 of Deep Learning, a course at Institute of Data Science, Na
 
 - `main_keras.py`: the main program for training a 5-layered CNN with Keras. The following codes demonstrate the model structute.
 
-```
+```python
 raw_model = Sequential([
     layers.Conv2D(16, 3, input_shape=(size[0], size[1], 1), padding='same', activation='relu', kernel_regularizer=tf.keras.regularizers.l2(l=0.01)),
     layers.MaxPooling2D(),
@@ -35,21 +35,21 @@ raw_model = Sequential([
 - Source codes for training a 5-layered CNN with Keras:
 
     - `./aoi_keras/args.py`: define the arguments parser
-    
+
     - `./aoi_keras/trainer.py`: class for training, predicting, and evaluating the models
-    
+
     - `./aoi_keras/load_data.py`: functions for loading images with train/val/test splitting
 
 - `main_keras.py`: the main program for fine tuning a pretrained ResNet50 model and an EfficientNet-b7 model.
 
 - Source codes for fine tuning a pretrained ResNet50 model and an EfficientNet-b7 model:
-    
+
     - `./aoi_torch/args.py`: define the arguments parser
-    
+
     - `./aoi_torch/trainer.py`: class for training, predicting, and evaluating the models
 
     - `./aoi_torch/models.py`: define the models.
-    
+
     - `./aoi_torch/load_data.py`: functions for loading images with train/val/test splitting
 
 ## Folders
@@ -58,7 +58,7 @@ raw_model = Sequential([
 
 - `./test_images/` should contain 10,142 testing image files without ground truth lables (please go [here](https://aidea-web.tw/topic/285ef3be-44eb-43dd-85cc-f0388bf85ea4?focus=intro) to download). The folder `./images_test/` will be created after running the main program of torch version.
 
-- `./output_torch/` and `./output_keras/` will contain trained models, model performances, and experiments results after running. 
+- `./output_torch/` and `./output_keras/` will contain trained models, model performances, and experiments results after running.
 
 ## Requirements
 
@@ -78,20 +78,20 @@ tensorflow-gpu==2.3.1
 
 1. Clone this repo.
 
-```
+```bash
 git clone https://github.com/jayenliao/DL-AOI.git
 ```
 
 2. Set up the required packages.
 
-```
+```bash
 cd DL-AOI
 pip3 install -H requirements.txt
 ```
 
 3. Run the experiments.
 
-```
+```bash
 python3 main_keras.py
 python3 main_torch.py
 ```
